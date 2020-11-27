@@ -1,0 +1,71 @@
+version: '2'
+
+services:
+
+  traefik:
+    image: traefik:v2.0
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker/traefik/traefik.yml:/etc/traefik/traefik.yml
+    labels:
+      - "traefik.http.routers.traefik.rule=Host(`traefik.myproject.localhost`)"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+
+  nginx:
+    hostname: nginx
+    build: docker/nginx
+    volumes:
+      - ./volumes/app:/app
+    links:
+      - php
+    labels:
+      - "traefik.http.routers.nginx.rule=Host(`myproject.localhost`)"
+    tty: true
+
+  php:
+    hostname: php
+    build: docker/php-fpm
+    volumes:
+      - ./volumes/app:/app
+      - ~/.ssh:/var/www/.ssh
+    working_dir: /app/myproject
+    links:
+      - db
+    tty: true
+    environment:
+      - PHP_IDE_CONFIG=serverName=dyg
+
+  node:
+    hostname: node
+    build: docker/node
+    tty: true
+    volumes:
+      - ./volumes/app:/app
+    working_dir: /app/myproject
+    labels:
+      - "traefik.http.routers.node.rule=Host(`node.myproject.localhost`)"
+      - "traefik.http.services.node.loadbalancer.server.port=8080"
+
+  db:
+    hostname: db
+    image: postgres:10
+    volumes:
+      - ./volumes/db:/var/lib/postgresql/data
+      - ./volumes/db_dump:/var/db_dump
+    environment:
+      POSTGRES_DB: gestion_actifs_v2
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+  adminer:
+    image: adminer
+    environment:
+      ADMINER_DEFAULT_DB_DRIVER: pgsql
+      ADMINER_DEFAULT_DB_HOST: postgres
+      ADMINER_DEFAULT_DB_NAME: gestion_actifs_v2
+    labels:
+      - "traefik.http.routers.adminer.rule=Host(`adminer.myproject.localhost`)"
+      - "traefik.http.services.adminer.loadbalancer.server.port=8080"
